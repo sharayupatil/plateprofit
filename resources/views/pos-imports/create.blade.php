@@ -6,6 +6,7 @@
 
     <p>
         Upload a CSV containing order, customer and product data.
+        Slash-separated order dates use DD/MM/YYYY, for example 21/11/2026 12:45.
     </p>
 
     @if ($errors->any())

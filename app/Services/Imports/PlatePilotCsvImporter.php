@@ -74,6 +74,7 @@ class PlatePilotCsvImporter
             }
 
             $row = array_combine($headers, $values);
+            $originalOrderDate = trim((string) $row['order_date']);
             $row = $this->normaliseRow($row);
 
             $validator = Validator::make(
@@ -82,6 +83,7 @@ class PlatePilotCsvImporter
             );
 
             if ($validator->fails()) {
+                $row['order_date'] = $originalOrderDate;
                 $this->recordError(
                     $posImport,
                     $rowNumber,
@@ -95,6 +97,7 @@ class PlatePilotCsvImporter
             $orders[$row['order_id']][] = [
                 'row_number' => $rowNumber,
                 'data' => $row,
+                'original_order_date' => $originalOrderDate,
             ];
         }
 
@@ -118,6 +121,7 @@ class PlatePilotCsvImporter
                 );
             } catch (Throwable $exception) {
                 foreach ($orderRows as $orderRow) {
+                    $orderRow['data']['order_date'] = $orderRow['original_order_date'];
                     $this->recordError(
                         $posImport,
                         $orderRow['row_number'],
@@ -197,7 +201,7 @@ class PlatePilotCsvImporter
     {
         return [
             'order_id' => trim((string) $row['order_id']),
-            'order_date' => trim((string) $row['order_date']),
+            'order_date' => $this->normaliseOrderDate($row['order_date']),
             'customer_name' => $this->nullableString(
                 $row['customer_name']
             ),
@@ -217,6 +221,18 @@ class PlatePilotCsvImporter
                 $row['payment_method']
             ),
         ];
+    }
+
+    private function normaliseOrderDate(mixed $value): string
+    {
+        $date = trim((string) $value);
+
+        if (preg_match('~^(\d{1,2})/(\d{1,2})/(\d{4})(?=\s|$)~', $date, $matches)) {
+            return sprintf('%s-%02d-%02d', $matches[3], $matches[2], $matches[1])
+                .substr($date, strlen($matches[0]));
+        }
+
+        return $date;
     }
 
     private function importOrder(
