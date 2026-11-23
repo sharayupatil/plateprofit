@@ -6,25 +6,87 @@ use App\Http\Requests\StorePosImportRequest;
 use App\Models\PosImport;
 use App\Services\Imports\PlatePilotCsvImporter;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\View\View;
+use Inertia\Inertia;
+use Inertia\Response;
 use Throwable;
 
 class PosImportController extends Controller
 {
-    public function index(): View
+    //Blade templates are replaced with Inertia responses
+    // public function index(): View
+    // {
+    //     $imports = PosImport::query()
+    //         ->with('errors')
+    //         ->where('restaurant_id', auth()->user()->restaurant_id)
+    //         ->latest()
+    //         ->paginate(20);
+
+    //     return view('pos-imports.index', compact('imports'));
+    // }
+
+    public function index(): Response
     {
         $imports = PosImport::query()
-            ->with('errors')
             ->where('restaurant_id', auth()->user()->restaurant_id)
             ->latest()
             ->paginate(20);
 
-        return view('pos-imports.index', compact('imports'));
+        $imports->through(function (PosImport $import) {
+            return [
+                'id' => $import->id,
+                'original_filename' => $import->original_filename,
+                'status' => $import->status,
+                'rows_processed' => $import->rows_processed,
+                'rows_successful' => $import->rows_successful,
+                'rows_failed' => $import->rows_failed,
+                'created_at' => $import->created_at->format('d M Y H:i'),
+            ];
+        });
+
+        return Inertia::render('PosImports/Index', [
+            'imports' => $imports,
+            'success' => session('success'),
+        ]);
     }
 
-    public function create(): View
+    public function errors(PosImport $posImport): Response
     {
-        return view('pos-imports.create');
+        abort_unless(
+            $posImport->restaurant_id === auth()->user()->restaurant_id,
+            404
+        );
+
+        $posImport->load('errors');
+
+        return Inertia::render('PosImports/Errors', [
+            'posImport' => [
+                'id' => $posImport->id,
+                'original_filename' => $posImport->original_filename,
+                'status' => $posImport->status,
+                'rows_processed' => $posImport->rows_processed,
+                'rows_successful' => $posImport->rows_successful,
+                'rows_failed' => $posImport->rows_failed,
+
+                'errors' => $posImport->errors->map(function ($error) {
+                    return [
+                        'id' => $error->id,
+                        'row_number' => $error->row_number,
+                        'message' => $error->message,
+                    ];
+                })->values(),
+            ],
+        ]);
+    }
+
+    //Blade templates are replaced with Inertia responses
+    // public function create(): View
+    // {
+    //     return view('pos-imports.create');
+    // }
+
+    public function create(): Response
+    {
+        return Inertia::render('PosImports/Create');
     }
 
     public function store(
